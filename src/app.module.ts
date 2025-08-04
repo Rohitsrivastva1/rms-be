@@ -12,6 +12,7 @@ import { PaymentsModule } from './payments/payments.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { SuperAdminModule } from './superadmin/superadmin.module';
 import { TablesModule } from './tables/tables.module';
+import { StaffModule } from './staff/staff.module';
 import { User } from './common/entities/user.entity';
 import { Restaurant } from './common/entities/restaurant.entity';
 import { MenuItem } from './common/entities/menu.entity';
@@ -48,6 +49,7 @@ import { Notification } from './common/entities/notification.entity';
     NotificationsModule,
     SuperAdminModule,
     TablesModule,
+    StaffModule,
   ],
   controllers: [AppController],
   providers: [AppService],

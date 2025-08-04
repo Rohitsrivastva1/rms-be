@@ -1,61 +1,74 @@
 import { Injectable } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
-import { Payment, PaymentStatus, PaymentMethod } from '../common/entities/payment.entity';
+import { ConfigService } from '@nestjs/config';
 
 @Injectable()
 export class PaymentsService {
-  constructor(
-    @InjectRepository(Payment)
-    private paymentRepository: Repository<Payment>,
-  ) {}
+  constructor(private configService: ConfigService) {}
 
-  async createPaymentIntent(createIntentDto: any) {
-    const { orderId, amount, currency, customerEmail } = createIntentDto;
-
-    // Mock Razorpay integration
-    const paymentIntentId = `pi_${Date.now()}`;
-    const razorpayOrderId = `order_${Date.now()}`;
-
-    const payment = this.paymentRepository.create({
-      orderId,
-      paymentIntentId,
-      razorpayOrderId,
-      amount,
-      currency,
-      paymentMethod: PaymentMethod.RAZORPAY,
-      status: PaymentStatus.PENDING,
-      customerEmail,
-      restaurantId: 1 // Mock restaurant ID
+  async createRazorpayOrder(orderData: any) {
+    const Razorpay = require('razorpay');
+    
+    const razorpay = new Razorpay({
+      key_id: this.configService.get('RAZORPAY_KEY_ID'),
+      key_secret: this.configService.get('RAZORPAY_KEY_SECRET'),
     });
 
-    await this.paymentRepository.save(payment);
-
-    return {
-      paymentIntentId,
-      clientSecret: `${paymentIntentId}_secret_${Date.now()}`,
-      razorpayOrderId
+    const options = {
+      amount: orderData.totalAmount * 100, // Razorpay expects amount in paise
+      currency: 'INR',
+      receipt: `order_${Date.now()}`,
+      payment_capture: 1,
+      notes: {
+        orderId: orderData.orderId,
+        tableNumber: orderData.tableNumber,
+        restaurantId: orderData.restaurantId,
+      },
     };
+
+    try {
+      const order = await razorpay.orders.create(options);
+      return {
+        orderId: order.id,
+        amount: order.amount,
+        currency: order.currency,
+        keyId: this.configService.get('RAZORPAY_KEY_ID'),
+      };
+    } catch (error) {
+      throw new Error(`Failed to create Razorpay order: ${error.message}`);
+    }
   }
 
-  async processWebhook(webhookData: any) {
-    const { event, payload } = webhookData;
+  async verifyPayment(paymentData: any) {
+    const crypto = require('crypto');
+    const Razorpay = require('razorpay');
+    
+    const razorpay = new Razorpay({
+      key_id: this.configService.get('RAZORPAY_KEY_ID'),
+      key_secret: this.configService.get('RAZORPAY_KEY_SECRET'),
+    });
 
-    if (event === 'payment.captured') {
-      const paymentData = payload.payment.entity;
-      
-      const payment = await this.paymentRepository.findOne({
-        where: { razorpayOrderId: paymentData.order_id }
-      });
+    const {
+      razorpay_order_id,
+      razorpay_payment_id,
+      razorpay_signature,
+    } = paymentData;
 
-      if (payment) {
-        payment.status = PaymentStatus.COMPLETED;
-        payment.razorpayPaymentId = paymentData.id;
-        payment.transactionData = paymentData;
-        await this.paymentRepository.save(payment);
-      }
+    const body = razorpay_order_id + '|' + razorpay_payment_id;
+    const expectedSignature = crypto
+      .createHmac('sha256', this.configService.get('RAZORPAY_KEY_SECRET'))
+      .update(body.toString())
+      .digest('hex');
+
+    const isAuthentic = expectedSignature === razorpay_signature;
+
+    if (isAuthentic) {
+      return {
+        verified: true,
+        paymentId: razorpay_payment_id,
+        orderId: razorpay_order_id,
+      };
+    } else {
+      throw new Error('Payment verification failed');
     }
-
-    return { message: 'Webhook processed successfully' };
   }
 } 

@@ -15,9 +15,17 @@ export class Table {
   @ApiProperty()
   id: number;
 
-  @Column({ name: 'table_number', type: 'int' })
+  @Column({ name: 'table_number', type: 'varchar', length: 50 })
   @ApiProperty()
-  tableNumber: number;
+  tableNumber: string;
+
+  @Column({ name: 'name', type: 'varchar', length: 100 })
+  @ApiProperty()
+  name: string;
+
+  @Column({ name: 'area', type: 'varchar', length: 100 })
+  @ApiProperty()
+  area: string;
 
   @Column({ name: 'restaurant_id', type: 'int' })
   @ApiProperty()

@@ -27,7 +27,7 @@ export class MenuController {
 
   @Get('admin')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.ADMIN)
+  @Roles(UserRole.ADMIN, UserRole.MANAGER)
   @ApiOperation({ summary: 'Get menu items (admin)' })
   @ApiResponse({ status: 200, description: 'Menu items retrieved successfully' })
   async getAdminMenuItems(@Query() query: any) {
@@ -43,7 +43,7 @@ export class MenuController {
 
   @Post()
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.ADMIN)
+  @Roles(UserRole.ADMIN, UserRole.MANAGER)
   @ApiOperation({ summary: 'Create menu item' })
   @ApiResponse({ status: 201, description: 'Menu item created successfully' })
   async createMenuItem(@Body() createMenuItemDto: any) {
@@ -52,7 +52,7 @@ export class MenuController {
 
   @Put(':id')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.ADMIN)
+  @Roles(UserRole.ADMIN, UserRole.MANAGER)
   @ApiOperation({ summary: 'Update menu item' })
   @ApiResponse({ status: 200, description: 'Menu item updated successfully' })
   async updateMenuItem(@Param('id') id: number, @Body() updateMenuItemDto: any) {
@@ -61,7 +61,7 @@ export class MenuController {
 
   @Delete(':id')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.ADMIN)
+  @Roles(UserRole.ADMIN, UserRole.MANAGER)
   @ApiOperation({ summary: 'Delete menu item' })
   @ApiResponse({ status: 200, description: 'Menu item deleted successfully' })
   async deleteMenuItem(@Param('id') id: number) {
@@ -70,7 +70,7 @@ export class MenuController {
 
   @Put(':id/toggle-availability')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.ADMIN)
+  @Roles(UserRole.ADMIN, UserRole.MANAGER)
   @ApiOperation({ summary: 'Toggle menu item availability' })
   @ApiResponse({ status: 200, description: 'Availability toggled successfully' })
   async toggleAvailability(@Param('id') id: number) {

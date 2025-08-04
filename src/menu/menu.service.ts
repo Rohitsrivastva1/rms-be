@@ -22,81 +22,33 @@ export class MenuService {
   async findAll(query: any) {
     const { category, search, available, restaurantId } = query;
     
-    // For now, return mock data since the database might be empty
-    const mockItems = [
-      {
-        id: 1,
-        name: 'Butter Chicken',
-        description: 'Creamy and rich butter chicken curry',
-        price: 450,
-        category: 'main_course',
-        available: true,
-        restaurantId: 1,
-        image: 'https://via.placeholder.com/300x200?text=Butter+Chicken',
-        veg: false,
-        spicyLevel: 2
-      },
-      {
-        id: 2,
-        name: 'Biryani',
-        description: 'Fragrant rice dish with aromatic spices',
-        price: 350,
-        category: 'main_course',
-        available: true,
-        restaurantId: 1,
-        image: 'https://via.placeholder.com/300x200?text=Biryani',
-        veg: false,
-        spicyLevel: 3
-      },
-      {
-        id: 3,
-        name: 'Naan',
-        description: 'Soft and fluffy Indian bread',
-        price: 50,
-        category: 'side_dish',
-        available: true,
-        restaurantId: 1,
-        image: 'https://via.placeholder.com/300x200?text=Naan',
-        veg: true,
-        spicyLevel: 0
-      },
-      {
-        id: 4,
-        name: 'Dal Makhani',
-        description: 'Creamy black lentils',
-        price: 200,
-        category: 'main_course',
-        available: true,
-        restaurantId: 1,
-        image: 'https://via.placeholder.com/300x200?text=Dal+Makhani',
-        veg: true,
-        spicyLevel: 1
-      }
-    ];
+    const queryBuilder = this.menuRepository.createQueryBuilder('menu');
 
-    // Filter by restaurantId if provided
-    let items = mockItems;
     if (restaurantId) {
-      items = items.filter(item => item.restaurantId === parseInt(restaurantId));
+      queryBuilder.andWhere('menu.restaurantId = :restaurantId', { restaurantId });
     }
 
-    // Filter by category if provided
     if (category && category !== 'all') {
-      items = items.filter(item => item.category === category);
+      queryBuilder.andWhere('menu.category = :category', { category });
     }
 
-    // Filter by search term if provided
     if (search) {
-      items = items.filter(item => 
-        item.name.toLowerCase().includes(search.toLowerCase()) ||
-        item.description.toLowerCase().includes(search.toLowerCase())
+      queryBuilder.andWhere(
+        '(menu.name ILIKE :search OR menu.description ILIKE :search)',
+        { search: `%${search}%` }
       );
     }
 
-    // Filter by availability if provided
     if (available !== undefined) {
-      items = items.filter(item => item.available === (available === 'true'));
+      queryBuilder.andWhere('menu.available = :available', { 
+        available: available === 'true' 
+      });
     }
+
+    const items = await queryBuilder
+      .orderBy('menu.category', 'ASC')
+      .addOrderBy('menu.name', 'ASC')
+      .getMany();
 
     return { items };
   }
@@ -110,26 +62,48 @@ export class MenuService {
   }
 
   async create(createMenuItemDto: any) {
-    const menuItem = this.menuRepository.create(createMenuItemDto);
-    return this.menuRepository.save(menuItem);
+    console.log('Received createMenuItemDto:', createMenuItemDto);
+    
+    // Validate category
+    const validCategories = Object.values(MenuCategory);
+    if (!validCategories.includes(createMenuItemDto.category)) {
+      throw new Error(`Invalid category: ${createMenuItemDto.category}. Valid categories are: ${validCategories.join(', ')}`);
+    }
+    
+    const newItem = this.menuRepository.create({
+      ...createMenuItemDto,
+      image: createMenuItemDto.image || 'https://images.unsplash.com/photo-1565299624946-b28f40a0ca4b?w=300&h=200&fit=crop&crop=center',
+    });
+    
+    console.log('Creating menu item with data:', newItem);
+    const savedItem = await this.menuRepository.save(newItem);
+    console.log('Created menu item:', savedItem);
+    return savedItem;
   }
 
   async update(id: number, updateMenuItemDto: any) {
-    const menuItem = await this.findById(id);
-    Object.assign(menuItem, updateMenuItemDto);
-    return this.menuRepository.save(menuItem);
+    const existingItem = await this.findById(id);
+    const updatedItem = this.menuRepository.merge(existingItem, updateMenuItemDto);
+    const savedItem = await this.menuRepository.save(updatedItem);
+    
+    console.log('Updating menu item:', savedItem);
+    return savedItem;
   }
 
   async delete(id: number) {
     const menuItem = await this.findById(id);
     await this.menuRepository.remove(menuItem);
+    console.log('Deleting menu item:', menuItem);
     return { message: 'Menu item deleted successfully' };
   }
 
   async toggleAvailability(id: number) {
     const menuItem = await this.findById(id);
     menuItem.available = !menuItem.available;
-    return this.menuRepository.save(menuItem);
+    
+    const savedItem = await this.menuRepository.save(menuItem);
+    console.log('Toggling availability for menu item:', savedItem);
+    return savedItem;
   }
 
   async getMenuByRestaurant(restaurantId: number) {

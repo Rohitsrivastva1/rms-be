@@ -13,79 +13,19 @@ export class TablesService {
   async findByRestaurant(query: any) {
     const { restaurantId } = query;
     
-    // Mock data for tables
-    // In a real application, this would come from the database
-    const tables = [
-      { 
-        id: 1, 
-        name: 'Table 1', 
-        number: 'T1', 
-        capacity: 4, 
-        area: 'Main Hall',
-        status: 'active', 
-        restaurantId: 1 
-      },
-      { 
-        id: 2, 
-        name: 'Table 2', 
-        number: 'T2', 
-        capacity: 6, 
-        area: 'VIP Section',
-        status: 'active', 
-        restaurantId: 1 
-      },
-      { 
-        id: 3, 
-        name: 'Table 3', 
-        number: 'T3', 
-        capacity: 2, 
-        area: 'Main Hall',
-        status: 'inactive', 
-        restaurantId: 1 
-      },
-      { 
-        id: 4, 
-        name: 'Table 4', 
-        number: 'T4', 
-        capacity: 8, 
-        area: 'Outdoor',
-        status: 'active', 
-        restaurantId: 1 
-      },
-      { 
-        id: 5, 
-        name: 'Table 5', 
-        number: 'T5', 
-        capacity: 4, 
-        area: 'AC Room',
-        status: 'active', 
-        restaurantId: 1 
-      },
-      { 
-        id: 6, 
-        name: 'Table 6', 
-        number: 'T6', 
-        capacity: 6, 
-        area: 'Bar Area',
-        status: 'active', 
-        restaurantId: 1 
-      },
-    ].filter(table => table.restaurantId === parseInt(restaurantId));
+    const tables = await this.tableRepository.find({
+      where: { restaurantId: parseInt(restaurantId) },
+      order: { tableNumber: 'ASC' }
+    });
 
     return { tables };
   }
 
   async findById(id: number) {
-    // Mock data - in real app, this would come from database
-    const table = { 
-      id, 
-      name: `Table ${id}`, 
-      number: `T${id}`, 
-      capacity: 4, 
-      area: 'Main Hall',
-      status: 'active', 
-      restaurantId: 1 
-    };
+    const table = await this.tableRepository.findOne({
+      where: { id }
+    });
+    
     if (!table) {
       throw new NotFoundException('Table not found');
     }
@@ -93,46 +33,108 @@ export class TablesService {
   }
 
   async create(createTableDto: any) {
-    // Mock implementation
-    const table = { id: Date.now(), ...createTableDto };
-    return table;
+    console.log('Creating table with data:', createTableDto);
+    
+    const newTable = this.tableRepository.create({
+      ...createTableDto,
+      restaurantId: parseInt(createTableDto.restaurantId),
+      tableNumber: createTableDto.tableNumber || `T${Date.now()}`,
+      status: createTableDto.status || 'available'
+    });
+    
+    const savedTable = await this.tableRepository.save(newTable);
+    console.log('Created table:', savedTable);
+    return savedTable;
   }
 
   async update(id: number, updateTableDto: any) {
-    // Mock implementation
+    console.log('Updating table with data:', updateTableDto);
+    
     const table = await this.findById(id);
-    return { ...table, ...updateTableDto };
+    
+    Object.assign(table, updateTableDto);
+    const updatedTable = await this.tableRepository.save(table);
+    
+    console.log('Updated table:', updatedTable);
+    return updatedTable;
   }
 
   async delete(id: number) {
-    // Mock implementation
-    await this.findById(id);
+    const table = await this.findById(id);
+    await this.tableRepository.remove(table);
     return { message: 'Table deleted successfully' };
   }
 
   async updateStatus(id: number, updateStatusDto: any) {
-    // Mock implementation
     const table = await this.findById(id);
-    return { ...table, status: updateStatusDto.status };
+    table.status = updateStatusDto.status;
+    return await this.tableRepository.save(table);
   }
 
   async generateQRCode(id: number) {
-    // Mock implementation
     const table = await this.findById(id);
+    
+    // Generate QR code data with geofencing
+    const qrData = {
+      tableId: table.id,
+      tableNumber: table.tableNumber,
+      restaurantId: table.restaurantId,
+      url: `${process.env.FRONTEND_URL || 'http://localhost:3001'}/menu?table=${table.tableNumber}&restaurantId=${table.restaurantId}`,
+      geofence: {
+        latitude: 28.6139, // Default coordinates (can be customized per restaurant)
+        longitude: 77.2090,
+        radius: 100 // 100 meters radius
+      }
+    };
+    
+    // Update table with QR data
+    table.qrData = JSON.stringify(qrData);
+    table.qrCode = `QR_${table.tableNumber}_${Date.now()}`;
+    
+    const updatedTable = await this.tableRepository.save(table);
+    
     return {
-      tableId: id,
-      tableNumber: table.number,
-      qrCode: `https://example.com/table/${table.number}`,
-      qrData: `table:${table.number}:restaurant:${table.restaurantId}`
+      table: updatedTable,
+      qrData: qrData
     };
   }
 
   async getQRCode(tableNumber: string) {
-    // Mock implementation
+    const table = await this.tableRepository.findOne({
+      where: { tableNumber }
+    });
+    
+    if (!table) {
+      throw new NotFoundException('Table not found');
+    }
+    
+    if (!table.qrData) {
+      // Generate QR data if not exists
+      const qrData = {
+        tableId: table.id,
+        tableNumber: table.tableNumber,
+        restaurantId: table.restaurantId,
+        url: `${process.env.FRONTEND_URL || 'http://localhost:3001'}/menu?table=${table.tableNumber}&restaurantId=${table.restaurantId}`,
+        geofence: {
+          latitude: 28.6139,
+          longitude: 77.2090,
+          radius: 100
+        }
+      };
+      
+      table.qrData = JSON.stringify(qrData);
+      table.qrCode = `QR_${table.tableNumber}_${Date.now()}`;
+      await this.tableRepository.save(table);
+      
+      return {
+        table: table,
+        qrData: qrData
+      };
+    }
+    
     return {
-      tableNumber,
-      qrCode: `https://example.com/table/${tableNumber}`,
-      qrData: `table:${tableNumber}:restaurant:1`
+      table: table,
+      qrData: JSON.parse(table.qrData)
     };
   }
 } 

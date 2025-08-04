@@ -4,6 +4,9 @@ import { Restaurant } from './restaurant.entity';
 
 export enum OrderStatus {
   RECEIVED = 'received',
+  PENDING_PAYMENT = 'pending_payment',
+  PENDING_CASH_PAYMENT = 'pending_cash_payment',
+  CONFIRMED = 'confirmed',
   IN_PROGRESS = 'in_progress',
   READY = 'ready',
   SERVED = 'served',
@@ -25,9 +28,9 @@ export class Order {
   @ApiProperty()
   orderId: string;
 
-  @Column({ name: 'table_number', type: 'int' })
+  @Column({ name: 'table_number', type: 'varchar', length: 50 })
   @ApiProperty()
-  tableNumber: number;
+  tableNumber: string;
 
   @Column({ name: 'restaurant_id', type: 'int' })
   @ApiProperty()
@@ -72,6 +75,10 @@ export class Order {
   @Column({ name: 'special_instructions', type: 'text', nullable: true })
   @ApiProperty()
   specialInstructions: string;
+
+  @Column({ name: 'payment_method', length: 20, nullable: true })
+  @ApiProperty()
+  paymentMethod: string;
 
   @Column({ name: 'payment_details', type: 'json', nullable: true })
   @ApiProperty()

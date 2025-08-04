@@ -105,57 +105,88 @@ export class OrdersService {
   }
 
   async placeOrder(placeOrderDto: any) {
-    const { tableNumber, items, customerName, phone, restaurantId } = placeOrderDto;
-
-    // Calculate total amount
-    let totalAmount = 0;
-    const orderItems = [];
-
-    for (const item of items) {
-      // In real app, fetch menu item price from database
-      const itemPrice = 450; // Mock price
-      const itemTotal = itemPrice * item.quantity;
-      totalAmount += itemTotal;
-
-      orderItems.push({
-        menuItemId: item.id,
-        name: `Item ${item.id}`, // In real app, get from menu
-        quantity: item.quantity,
-        price: itemPrice,
-        notes: item.notes || null
+    try {
+      const { tableNumber, restaurantId, items, totalAmount, paymentMethod = 'razorpay' } = placeOrderDto;
+      
+      // Create order with appropriate status based on payment method
+      const orderStatus = paymentMethod === 'cash' ? OrderStatus.PENDING_CASH_PAYMENT : OrderStatus.PENDING_PAYMENT;
+      
+      const order = this.orderRepository.create({
+        orderNumber: `ORD-${Date.now()}`,
+        tableNumber,
+        restaurantId,
+        totalAmount,
+        status: orderStatus,
+        paymentMethod,
+        items: items.map(item => ({
+          menuItemId: item.menuItemId,
+          quantity: item.quantity,
+          unitPrice: item.unitPrice,
+          totalPrice: item.totalPrice
+        }))
       });
+
+      const savedOrder = await this.orderRepository.save(order);
+      
+      console.log('Order placed:', savedOrder);
+      return savedOrder;
+    } catch (error) {
+      console.error('Error placing order:', error);
+      throw new Error('Failed to place order');
     }
+  }
 
-    // Create order
-    const order = this.orderRepository.create({
-      orderNumber: `ORD${Date.now()}`,
-      orderId: `ORD${Date.now()}`,
-      tableNumber,
-      customerName,
-      customerPhone: phone,
-      totalAmount,
-      status: OrderStatus.RECEIVED,
-      restaurantId,
-      estimatedTime: 15 // Mock estimated time
-    });
-
-    const savedOrder = await this.orderRepository.save(order);
-
-    // Create order items
-    for (const item of orderItems) {
-      const orderItem = this.orderItemRepository.create({
-        ...item,
-        orderId: savedOrder.id
+  async getCustomerOrderStatus(orderId: number) {
+    try {
+      console.log('Looking for order with ID:', orderId);
+      
+      const order = await this.orderRepository.findOne({
+        where: { id: orderId }
       });
-      await this.orderItemRepository.save(orderItem);
-    }
 
-    return {
-      orderId: savedOrder.orderNumber,
-      totalAmount: savedOrder.totalAmount,
-      estimatedTime: savedOrder.estimatedTime,
-      status: savedOrder.status
-    };
+      console.log('Found order:', order);
+
+      if (!order) {
+        throw new Error('Order not found');
+      }
+
+      // Calculate estimated time based on status
+      let estimatedTime = 15; // Default 15 minutes
+      switch (order.status) {
+        case OrderStatus.PENDING_PAYMENT:
+        case OrderStatus.PENDING_CASH_PAYMENT:
+          estimatedTime = 20;
+          break;
+        case OrderStatus.CONFIRMED:
+          estimatedTime = 18;
+          break;
+        case OrderStatus.IN_PROGRESS:
+          estimatedTime = 10;
+          break;
+        case OrderStatus.READY:
+          estimatedTime = 0;
+          break;
+        case OrderStatus.SERVED:
+        case OrderStatus.COMPLETED:
+          estimatedTime = 0;
+          break;
+      }
+
+      return {
+        orderId: order.id,
+        orderNumber: order.orderNumber,
+        status: order.status,
+        estimatedTime,
+        totalAmount: order.totalAmount,
+        paymentMethod: order.paymentMethod,
+        tableNumber: order.tableNumber,
+        createdAt: order.createdAt,
+        updatedAt: order.updatedAt
+      };
+    } catch (error) {
+      console.error('Error getting customer order status:', error);
+      throw new Error('Failed to get order status');
+    }
   }
 
   async updateStatus(id: number, updateStatusDto: any) {
@@ -265,5 +296,131 @@ export class OrdersService {
       hourlyOrders,
       topItems
     };
+  }
+
+  async findById(id: number) {
+    // Mock implementation - in real app, this would query database
+    const mockOrders = [
+      {
+        id: 1,
+        orderNumber: 'ORD-001',
+        tableNumber: 'T1',
+        customerName: 'John Doe',
+        customerPhone: '+91 9876543210',
+        status: 'pending',
+        totalAmount: 450,
+        paymentMethod: 'pending',
+        items: [
+          { name: 'Butter Chicken', quantity: 1, price: 450 }
+        ],
+        createdAt: new Date(),
+        completedAt: null,
+        notes: 'Extra spicy please'
+      },
+      {
+        id: 2,
+        orderNumber: 'ORD-002',
+        tableNumber: 'T2',
+        customerName: 'Jane Smith',
+        customerPhone: '+91 9876543211',
+        status: 'completed',
+        totalAmount: 350,
+        paymentMethod: 'cash',
+        items: [
+          { name: 'Biryani', quantity: 1, price: 350 }
+        ],
+        createdAt: new Date(Date.now() - 3600000),
+        completedAt: new Date(Date.now() - 1800000),
+        notes: ''
+      }
+    ];
+    
+    const order = mockOrders.find(order => order.id === id);
+    if (!order) {
+      throw new NotFoundException('Order not found');
+    }
+    return order;
+  }
+
+  async create(createOrderDto: any) {
+    // Mock implementation - in real app, this would save to database
+    const newOrder = {
+      id: Date.now(),
+      ...createOrderDto,
+      orderNumber: `ORD-${Date.now()}`,
+      status: 'pending',
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
+    
+    console.log('Creating order:', newOrder);
+    return newOrder;
+  }
+
+  async update(id: number, updateOrderDto: any) {
+    // Mock implementation - in real app, this would update in database
+    const existingOrder = await this.findById(id);
+    const updatedOrder = {
+      ...existingOrder,
+      ...updateOrderDto,
+      id: id,
+      updatedAt: new Date()
+    };
+    
+    console.log('Updating order:', updatedOrder);
+    return updatedOrder;
+  }
+
+  async delete(id: number) {
+    // Mock implementation - in real app, this would delete from database
+    const order = await this.findById(id);
+    console.log('Deleting order:', order);
+    return { message: 'Order deleted successfully' };
+  }
+
+  async assignChef(id: number, assignChefDto: any) {
+    // Mock implementation - in real app, this would update in database
+    const order = await this.findById(id);
+    const updatedOrder = {
+      ...order,
+      assignedChefId: assignChefDto.chefId,
+      updatedAt: new Date()
+    };
+    
+    console.log('Assigning chef to order:', updatedOrder);
+    return updatedOrder;
+  }
+
+  async findByTable(tableNumber: string) {
+    // Mock implementation - in real app, this would query database
+    const mockOrders = [
+      {
+        id: 1,
+        orderNumber: 'ORD-001',
+        tableNumber: 'T1',
+        customerName: 'John Doe',
+        status: 'pending',
+        totalAmount: 450,
+        items: [
+          { name: 'Butter Chicken', quantity: 1, price: 450 }
+        ],
+        createdAt: new Date()
+      },
+      {
+        id: 2,
+        orderNumber: 'ORD-002',
+        tableNumber: 'T1',
+        customerName: 'Jane Smith',
+        status: 'completed',
+        totalAmount: 350,
+        items: [
+          { name: 'Biryani', quantity: 1, price: 350 }
+        ],
+        createdAt: new Date(Date.now() - 3600000)
+      }
+    ];
+
+    const orders = mockOrders.filter(order => order.tableNumber === tableNumber);
+    return { orders };
   }
 } 

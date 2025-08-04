@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Put, Body, Param, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Patch, Body, Param, Query, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { OrdersService } from './orders.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -61,6 +61,20 @@ export class OrdersController {
     return this.ordersService.placeOrder(placeOrderDto);
   }
 
+  @Post()
+  @ApiOperation({ summary: 'Place order (public customer endpoint)' })
+  @ApiResponse({ status: 201, description: 'Order placed successfully' })
+  async placeCustomerOrder(@Body() placeOrderDto: any) {
+    return this.ordersService.placeOrder(placeOrderDto);
+  }
+
+  @Get('customer/:orderId/status')
+  @ApiOperation({ summary: 'Get customer order status' })
+  @ApiResponse({ status: 200, description: 'Order status retrieved successfully' })
+  async getCustomerOrderStatus(@Param('orderId') orderId: string) {
+    return this.ordersService.getCustomerOrderStatus(parseInt(orderId));
+  }
+
   @Put(':id/status')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN, UserRole.CHEF)
@@ -75,5 +89,68 @@ export class OrdersController {
   @ApiResponse({ status: 201, description: 'Feedback submitted successfully' })
   async submitFeedback(@Param('orderId') orderId: string, @Body() feedbackDto: any) {
     return this.ordersService.submitFeedback(orderId, feedbackDto);
+  }
+
+  @Get()
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN, UserRole.MANAGER)
+  @ApiOperation({ summary: 'Get all orders' })
+  @ApiResponse({ status: 200, description: 'Orders retrieved successfully' })
+  async getAllOrders(@Query() query: any) {
+    return this.ordersService.findAll(query);
+  }
+
+  @Get(':id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN, UserRole.MANAGER)
+  @ApiOperation({ summary: 'Get order by ID' })
+  @ApiResponse({ status: 200, description: 'Order retrieved successfully' })
+  async getOrderById(@Param('id') id: number) {
+    return this.ordersService.findById(id);
+  }
+
+  @Post()
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN, UserRole.MANAGER)
+  @ApiOperation({ summary: 'Create order' })
+  @ApiResponse({ status: 201, description: 'Order created successfully' })
+  async createOrder(@Body() createOrderDto: any) {
+    return this.ordersService.create(createOrderDto);
+  }
+
+  @Put(':id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN, UserRole.MANAGER)
+  @ApiOperation({ summary: 'Update order' })
+  @ApiResponse({ status: 200, description: 'Order updated successfully' })
+  async updateOrder(@Param('id') id: number, @Body() updateOrderDto: any) {
+    return this.ordersService.update(id, updateOrderDto);
+  }
+
+  @Delete(':id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN, UserRole.MANAGER)
+  @ApiOperation({ summary: 'Delete order' })
+  @ApiResponse({ status: 200, description: 'Order deleted successfully' })
+  async deleteOrder(@Param('id') id: number) {
+    return this.ordersService.delete(id);
+  }
+
+  @Patch(':id/assign-chef')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN, UserRole.MANAGER)
+  @ApiOperation({ summary: 'Assign chef to order' })
+  @ApiResponse({ status: 200, description: 'Chef assigned successfully' })
+  async assignChef(@Param('id') id: number, @Body() assignChefDto: any) {
+    return this.ordersService.assignChef(id, assignChefDto);
+  }
+
+  @Get('table/:tableNumber')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN, UserRole.MANAGER)
+  @ApiOperation({ summary: 'Get orders by table number' })
+  @ApiResponse({ status: 200, description: 'Orders retrieved successfully' })
+  async getOrdersByTable(@Param('tableNumber') tableNumber: string) {
+    return this.ordersService.findByTable(tableNumber);
   }
 } 
