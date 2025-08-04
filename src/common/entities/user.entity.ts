@@ -12,6 +12,12 @@ export enum UserRole {
   CUSTOMER = 'customer',
 }
 
+export enum UserStatus {
+  ACTIVE = 'active',
+  INACTIVE = 'inactive',
+  ON_LEAVE = 'on_leave',
+}
+
 @Entity('users')
 export class User {
   @PrimaryGeneratedColumn()
@@ -41,6 +47,14 @@ export class User {
   })
   @ApiProperty({ enum: UserRole })
   role: UserRole;
+
+  @Column({
+    type: 'enum',
+    enum: UserStatus,
+    default: UserStatus.ACTIVE,
+  })
+  @ApiProperty({ enum: UserStatus })
+  status: UserStatus;
 
   @Column({ name: 'restaurant_id', nullable: true })
   @ApiProperty()

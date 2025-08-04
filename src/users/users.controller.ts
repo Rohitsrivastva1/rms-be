@@ -20,6 +20,32 @@ export class UsersController {
     return this.usersService.findAll(query);
   }
 
+  @Get('profile')
+  @ApiOperation({ summary: 'Get current user profile' })
+  @ApiResponse({ status: 200, description: 'Profile retrieved successfully' })
+  async getProfile(@Request() req: any) {
+    // Return the current user's profile (excluding password)
+    const { password, ...userProfile } = req.user;
+    return userProfile;
+  }
+
+  @Put('profile')
+  @ApiOperation({ summary: 'Update current user profile' })
+  @ApiResponse({ status: 200, description: 'Profile updated successfully' })
+  async updateProfile(@Request() req: any, @Body() updateProfileDto: any) {
+    // Only allow updating certain fields for security
+    const allowedFields = ['name', 'email', 'phone'];
+    const filteredData = {};
+    
+    for (const field of allowedFields) {
+      if (updateProfileDto[field] !== undefined) {
+        filteredData[field] = updateProfileDto[field];
+      }
+    }
+    
+    return this.usersService.update(req.user.id, filteredData);
+  }
+
   @Get(':id')
   @ApiOperation({ summary: 'Get user by ID' })
   @ApiResponse({ status: 200, description: 'User retrieved successfully' })

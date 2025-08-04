@@ -77,7 +77,7 @@ export class OrdersController {
 
   @Put(':id/status')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.ADMIN, UserRole.CHEF)
+  @Roles(UserRole.ADMIN, UserRole.CHEF, UserRole.WAITER)
   @ApiOperation({ summary: 'Update order status' })
   @ApiResponse({ status: 200, description: 'Order status updated successfully' })
   async updateOrderStatus(@Param('id') id: number, @Body() updateStatusDto: any) {
@@ -93,7 +93,7 @@ export class OrdersController {
 
   @Get()
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.ADMIN, UserRole.MANAGER)
+  @Roles(UserRole.ADMIN, UserRole.MANAGER, UserRole.CHEF, UserRole.WAITER)
   @ApiOperation({ summary: 'Get all orders' })
   @ApiResponse({ status: 200, description: 'Orders retrieved successfully' })
   async getAllOrders(@Query() query: any) {
@@ -102,7 +102,7 @@ export class OrdersController {
 
   @Get(':id')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.ADMIN, UserRole.MANAGER)
+  @Roles(UserRole.ADMIN, UserRole.MANAGER, UserRole.CHEF)
   @ApiOperation({ summary: 'Get order by ID' })
   @ApiResponse({ status: 200, description: 'Order retrieved successfully' })
   async getOrderById(@Param('id') id: number) {

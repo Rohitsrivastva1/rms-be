@@ -23,7 +23,12 @@ export class OrdersService {
     }
 
     if (status) {
-      queryBuilder.andWhere('order.status = :status', { status });
+      // Handle both single status and array of statuses
+      if (Array.isArray(status)) {
+        queryBuilder.andWhere('order.status IN (:...statuses)', { statuses: status });
+      } else {
+        queryBuilder.andWhere('order.status = :status', { status });
+      }
     }
 
     if (table) {
