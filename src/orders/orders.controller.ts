@@ -102,7 +102,7 @@ export class OrdersController {
 
   @Get(':id')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.ADMIN, UserRole.MANAGER, UserRole.CHEF)
+  @Roles(UserRole.ADMIN, UserRole.MANAGER, UserRole.CHEF, UserRole.WAITER)
   @ApiOperation({ summary: 'Get order by ID' })
   @ApiResponse({ status: 200, description: 'Order retrieved successfully' })
   async getOrderById(@Param('id') id: number) {
@@ -147,7 +147,7 @@ export class OrdersController {
 
   @Get('table/:tableNumber')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.ADMIN, UserRole.MANAGER)
+  @Roles(UserRole.ADMIN, UserRole.MANAGER, UserRole.WAITER)
   @ApiOperation({ summary: 'Get orders by table number' })
   @ApiResponse({ status: 200, description: 'Orders retrieved successfully' })
   async getOrdersByTable(@Param('tableNumber') tableNumber: string) {
