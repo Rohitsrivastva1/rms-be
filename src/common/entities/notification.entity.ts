@@ -1,20 +1,26 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, ManyToOne, JoinColumn } from 'typeorm';
 import { ApiProperty } from '@nestjs/swagger';
+import { Cart } from './cart.entity';
+import { User } from './user.entity';
 
 export enum NotificationType {
   ORDER_RECEIVED = 'order_received',
-  ORDER_IN_PROGRESS = 'order_in_progress',
+  ORDER_ACCEPTED = 'order_accepted',
+  ORDER_COOKING = 'order_cooking',
   ORDER_READY = 'order_ready',
-  ORDER_SERVED = 'order_served',
+  ORDER_DELIVERED = 'order_delivered',
+  ORDER_CANCELLED = 'order_cancelled',
   PAYMENT_RECEIVED = 'payment_received',
-  FEEDBACK_RECEIVED = 'feedback_received',
-  SYSTEM_ALERT = 'system_alert'
+  CART_APPROVED = 'cart_approved',
+  CART_SUSPENDED = 'cart_suspended',
+  SYSTEM_ALERT = 'system_alert',
 }
 
 export enum NotificationStatus {
   PENDING = 'pending',
   SENT = 'sent',
-  FAILED = 'failed'
+  FAILED = 'failed',
+  DELIVERED = 'delivered',
 }
 
 @Entity('notifications')
@@ -23,23 +29,42 @@ export class Notification {
   @ApiProperty()
   id: number;
 
-  @Column({ name: 'restaurant_id' })
+  @Column({ name: 'cart_id' })
   @ApiProperty()
-  restaurantId: number;
+  cartId: number;
+
+  @ManyToOne(() => Cart, cart => cart.notifications, { onDelete: 'CASCADE' })
+  @JoinColumn({ name: 'cart_id' })
+  cart: Cart;
 
   @Column({ name: 'user_id', nullable: true })
   @ApiProperty()
   userId: number;
 
-  @Column({ 
-    type: 'enum', 
-    enum: NotificationType,
-    name: 'type'
-  })
+  @ManyToOne(() => User, { onDelete: 'CASCADE', nullable: true })
+  @JoinColumn({ name: 'user_id' })
+  user: User;
+
+  @Column({ name: 'recipient_phone', length: 20, nullable: true })
   @ApiProperty()
+  recipientPhone: string;
+
+  @Column({ name: 'device_token', length: 500, nullable: true })
+  @ApiProperty()
+  deviceToken: string;
+
+  @Column({ name: 'restaurant_id', nullable: true })
+  @ApiProperty()
+  restaurantId: number;
+
+  @Column({
+    type: 'enum',
+    enum: NotificationType,
+  })
+  @ApiProperty({ enum: NotificationType })
   type: NotificationType;
 
-  @Column()
+  @Column({ length: 255 })
   @ApiProperty()
   title: string;
 
@@ -47,44 +72,27 @@ export class Notification {
   @ApiProperty()
   message: string;
 
-  @Column({ name: 'recipient_phone', nullable: true })
+  @Column({ type: 'jsonb', nullable: true })
   @ApiProperty()
-  recipientPhone: string;
+  data: any; // Additional data for the notification
 
-  @Column({ name: 'recipient_email', nullable: true })
-  @ApiProperty()
-  recipientEmail: string;
-
-  @Column({ name: 'device_token', nullable: true })
-  @ApiProperty()
-  deviceToken: string;
-
-  @Column({ 
-    type: 'enum', 
-    enum: NotificationStatus, 
+  @Column({
+    type: 'enum',
+    enum: NotificationStatus,
     default: NotificationStatus.PENDING,
-    name: 'status'
   })
-  @ApiProperty()
+  @ApiProperty({ enum: NotificationStatus })
   status: NotificationStatus;
-
-  @Column({ name: 'metadata', type: 'jsonb', nullable: true })
-  @ApiProperty()
-  metadata: any;
 
   @Column({ name: 'sent_at', nullable: true })
   @ApiProperty()
   sentAt: Date;
 
-  @Column({ name: 'error_message', nullable: true })
+  @Column({ name: 'read_at', nullable: true })
   @ApiProperty()
-  errorMessage: string;
+  readAt: Date;
 
   @CreateDateColumn({ name: 'created_at' })
   @ApiProperty()
   createdAt: Date;
-
-  @UpdateDateColumn({ name: 'updated_at' })
-  @ApiProperty()
-  updatedAt: Date;
-} 
+}

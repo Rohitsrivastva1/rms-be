@@ -3,10 +3,11 @@ import { JwtService } from '@nestjs/jwt';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import * as bcrypt from 'bcryptjs';
-import { User, UserRole } from '../common/entities/user.entity';
+import { User, UserRole, UserStatus } from '../common/entities/user.entity';
 import { Restaurant } from '../common/entities/restaurant.entity';
 import { LoginDto } from './dto/login.dto';
 import { RegisterRestaurantDto } from './dto/register-restaurant.dto';
+import { RegisterCartOwnerDto } from './dto/register-cart-owner.dto';
 
 @Injectable()
 export class AuthService {
@@ -21,8 +22,14 @@ export class AuthService {
   async login(loginDto: LoginDto) {
     const { email, password, role } = loginDto;
 
+    // If role is provided, search with role filter
+    // If role is not provided, search by email only
+    const whereCondition = role 
+      ? { email, role }
+      : { email };
+
     const user = await this.userRepository.findOne({
-      where: { email, role },
+      where: whereCondition,
     });
 
     if (!user) {
@@ -176,6 +183,61 @@ export class AuthService {
       };
     } catch (error) {
       console.error('JWT Sign Error in registerSuperAdmin:', error);
+      throw new Error('Failed to generate authentication token');
+    }
+  }
+
+  async registerCartOwner(registerDto: RegisterCartOwnerDto) {
+    const { name, email, password, phone, businessName, businessType, address } = registerDto;
+
+    // Check if user already exists
+    const existingUser = await this.userRepository.findOne({
+      where: { email },
+    });
+
+    if (existingUser) {
+      throw new BadRequestException('User with this email already exists');
+    }
+
+    // Hash password
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    // Create new cart owner user
+    const newUser = this.userRepository.create({
+      name,
+      email,
+      password: hashedPassword,
+      phone: phone || null,
+      role: UserRole.CART_OWNER,
+      status: UserStatus.ACTIVE,
+      isActive: true,
+    });
+
+    const savedUser = await this.userRepository.save(newUser);
+
+    // Generate JWT token
+    const payload = {
+      sub: savedUser.id,
+      email: savedUser.email,
+      role: savedUser.role,
+      restaurantId: savedUser.restaurantId,
+    };
+
+    try {
+      const token = this.jwtService.sign(payload);
+      return {
+        success: true,
+        token: token,
+        user: {
+          id: savedUser.id,
+          name: savedUser.name,
+          email: savedUser.email,
+          role: savedUser.role,
+          restaurantId: savedUser.restaurantId,
+        },
+      };
+    } catch (error) {
+      console.error('JWT Sign Error in registerCartOwner:', error);
       throw new Error('Failed to generate authentication token');
     }
   }

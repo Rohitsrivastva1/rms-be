@@ -2,6 +2,7 @@ import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateCol
 import { Exclude } from 'class-transformer';
 import { ApiProperty } from '@nestjs/swagger';
 import { Restaurant } from './restaurant.entity';
+import { Cart } from './cart.entity';
 
 export enum UserRole {
   SUPER_ADMIN = 'super_admin',
@@ -10,6 +11,8 @@ export enum UserRole {
   CHEF = 'chef',
   WAITER = 'waiter',
   CUSTOMER = 'customer',
+  CART_OWNER = 'cart_owner',
+  CART_WORKER = 'cart_worker',
 }
 
 export enum UserStatus {
@@ -63,6 +66,9 @@ export class User {
   @ManyToOne(() => Restaurant, restaurant => restaurant.users)
   @JoinColumn({ name: 'restaurant_id' })
   restaurant: Restaurant;
+
+  @OneToMany(() => Cart, cart => cart.owner)
+  carts: Cart[];
 
   @Column({ name: 'is_active', default: true })
   @ApiProperty()

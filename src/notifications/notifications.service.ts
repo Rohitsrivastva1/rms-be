@@ -21,7 +21,8 @@ export class NotificationsService {
       recipientPhone: to,
       status: NotificationStatus.SENT,
       restaurantId,
-      sentAt: new Date()
+      sentAt: new Date(),
+      cartId: 1 // Default cart ID for system notifications
     });
 
     await this.notificationRepository.save(notification);
@@ -43,9 +44,10 @@ export class NotificationsService {
       message: body,
       deviceToken: tokens.join(','),
       status: NotificationStatus.SENT,
-      metadata: data,
+      data: data,
       restaurantId,
-      sentAt: new Date()
+      sentAt: new Date(),
+      cartId: 1 // Default cart ID for system notifications
     });
 
     await this.notificationRepository.save(notification);
@@ -64,7 +66,8 @@ export class NotificationsService {
       message: `Order ${orderId} status updated`,
       status: NotificationStatus.PENDING,
       restaurantId,
-      metadata: { orderId }
+      data: { orderId },
+      cartId: 1 // Default cart ID for system notifications
     });
 
     return this.notificationRepository.save(notification);

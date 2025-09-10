@@ -2,21 +2,21 @@ const axios = require('axios');
 
 const BASE_URL = 'http://localhost:3000';
 
-async function checkBackendStatus() {
+async function testBackendStatus() {
   try {
-    console.log('🔍 Checking backend status...');
-    
-    const response = await axios.get(`${BASE_URL}/health`);
-    console.log('✅ Backend is running!');
-    console.log('📊 Status:', response.status);
-    
+    console.log('🧪 Testing Backend Status...\n');
+
+    // Test if backend is running
+    const healthResponse = await axios.get(`${BASE_URL}/health`);
+    console.log('✅ Backend is running:', healthResponse.data);
+
   } catch (error) {
     if (error.code === 'ECONNREFUSED') {
-      console.log('❌ Backend is not running. Please start it with: npm run start:dev');
+      console.log('❌ Backend is not running - connection refused');
     } else {
-      console.log('⚠️ Backend responded with error:', error.response?.status || error.message);
+      console.log('❌ Backend error:', error.response?.data || error.message);
     }
   }
 }
 
-checkBackendStatus(); 
+testBackendStatus();

@@ -32,13 +32,17 @@ export class Order {
   @ApiProperty()
   tableNumber: string;
 
-  @Column({ name: 'restaurant_id', type: 'int' })
+  @Column({ name: 'restaurant_id', type: 'int', nullable: true })
   @ApiProperty()
   restaurantId: number;
 
   @ManyToOne(() => Restaurant, restaurant => restaurant.orders)
   @JoinColumn({ name: 'restaurant_id' })
   restaurant: Restaurant;
+
+  @Column({ name: 'cart_id', type: 'int', nullable: true })
+  @ApiProperty()
+  cartId: number;
 
   @Column({ name: 'customer_name', length: 100, nullable: true })
   @ApiProperty()
@@ -59,6 +63,30 @@ export class Order {
   @Column({ name: 'total_amount', type: 'decimal', precision: 10, scale: 2 })
   @ApiProperty()
   totalAmount: number;
+
+  @Column({ name: 'customer_email', length: 100, nullable: true })
+  @ApiProperty()
+  customerEmail: string;
+
+  @Column({ name: 'car_number', length: 20, nullable: true })
+  @ApiProperty()
+  carNumber: string;
+
+  @Column({ name: 'seat_number', length: 20, nullable: true })
+  @ApiProperty()
+  seatNumber: string;
+
+  @Column({ name: 'tax_amount', type: 'decimal', precision: 10, scale: 2, default: 0 })
+  @ApiProperty()
+  taxAmount: number;
+
+  @Column({ name: 'discount_amount', type: 'decimal', precision: 10, scale: 2, default: 0 })
+  @ApiProperty()
+  discountAmount: number;
+
+  @Column({ name: 'final_amount', type: 'decimal', precision: 10, scale: 2 })
+  @ApiProperty()
+  finalAmount: number;
 
   @Column({ name: 'estimated_time', type: 'int', default: 0 })
   @ApiProperty()

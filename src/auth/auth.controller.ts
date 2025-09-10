@@ -3,6 +3,7 @@ import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
 import { RegisterRestaurantDto } from './dto/register-restaurant.dto';
+import { RegisterCartOwnerDto } from './dto/register-cart-owner.dto';
 
 @ApiTags('Authentication')
 @Controller('auth')
@@ -32,5 +33,13 @@ export class AuthController {
   @ApiResponse({ status: 400, description: 'Bad request' })
   async registerSuperAdmin(@Body() registerDto: any) {
     return this.authService.registerSuperAdmin(registerDto);
+  }
+
+  @Post('register-cart-owner')
+  @ApiOperation({ summary: 'Register new Cart Owner account' })
+  @ApiResponse({ status: 201, description: 'Cart Owner registered successfully' })
+  @ApiResponse({ status: 400, description: 'Bad request' })
+  async registerCartOwner(@Body() registerDto: RegisterCartOwnerDto) {
+    return this.authService.registerCartOwner(registerDto);
   }
 } 

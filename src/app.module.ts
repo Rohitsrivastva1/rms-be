@@ -13,6 +13,7 @@ import { NotificationsModule } from './notifications/notifications.module';
 import { SuperAdminModule } from './superadmin/superadmin.module';
 import { TablesModule } from './tables/tables.module';
 import { StaffModule } from './staff/staff.module';
+import { CartModule } from './cart/cart.module';
 import { User } from './common/entities/user.entity';
 import { Restaurant } from './common/entities/restaurant.entity';
 import { MenuItem } from './common/entities/menu.entity';
@@ -21,6 +22,16 @@ import { Table } from './common/entities/table.entity';
 import { Feedback } from './common/entities/feedback.entity';
 import { Payment } from './common/entities/payment.entity';
 import { Notification } from './common/entities/notification.entity';
+import { Cart } from './common/entities/cart.entity';
+import { CartWorker } from './common/entities/cart-worker.entity';
+import { MenuCategory } from './common/entities/menu-category.entity';
+import { MenuItem as CartMenuItem } from './common/entities/menu-item.entity';
+import { CartOrder } from './common/entities/cart-order.entity';
+import { OrderItem as CartOrderItem } from './common/entities/order-item.entity';
+import { CartPaymentSetting } from './common/entities/cart-payment-setting.entity';
+import { CartAnalytics } from './common/entities/cart-analytics.entity';
+import { CustomerFeedback } from './common/entities/customer-feedback.entity';
+import { CartSetting } from './common/entities/cart-setting.entity';
 
 @Module({
   imports: [
@@ -35,8 +46,28 @@ import { Notification } from './common/entities/notification.entity';
       username:  'postgres',
       password: '9695',
       database:  'rms_db',
-      entities: [User, Restaurant, MenuItem, Order, OrderItem, Table, Feedback, Payment, Notification],
-      synchronize:true, // This will auto-create tables
+      entities: [
+        User, 
+        Restaurant, 
+        MenuItem, 
+        Order, 
+        OrderItem, 
+        Table, 
+        Feedback, 
+        Payment, 
+        Notification,
+        Cart,
+        CartWorker,
+        MenuCategory,
+        CartMenuItem,
+        CartOrder,
+        CartOrderItem,
+        CartPaymentSetting,
+        CartAnalytics,
+        CustomerFeedback,
+        CartSetting
+      ],
+                synchronize: false, // Disabled to prevent schema conflicts
       logging: process.env.NODE_ENV === 'development',
       ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
     }),
@@ -50,6 +81,7 @@ import { Notification } from './common/entities/notification.entity';
     SuperAdminModule,
     TablesModule,
     StaffModule,
+    CartModule,
   ],
   controllers: [AppController],
   providers: [AppService],
