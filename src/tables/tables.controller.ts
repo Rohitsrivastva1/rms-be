@@ -12,8 +12,22 @@ import { UserRole } from '../common/entities/user.entity';
 export class TablesController {
   constructor(private readonly tablesService: TablesService) {}
 
+  @Get('qr/:tableNumber')
+  @ApiOperation({ summary: 'Get QR code by table number' })
+  @ApiResponse({ status: 200, description: 'QR code retrieved successfully' })
+  async getQRCode(@Param('tableNumber') tableNumber: string) {
+    return this.tablesService.getQRCode(tableNumber);
+  }
+
+  @Get(':id/qr-code')
+  @ApiOperation({ summary: 'Generate QR code for table' })
+  @ApiResponse({ status: 200, description: 'QR code generated successfully' })
+  async generateQRCode(@Param('id') id: number) {
+    return this.tablesService.generateQRCode(id);
+  }
+
   @Get()
-  @Roles(UserRole.ADMIN, UserRole.MANAGER)
+  @Roles(UserRole.ADMIN, UserRole.MANAGER, UserRole.WAITER)
   @ApiOperation({ summary: 'Get tables by restaurant' })
   @ApiResponse({ status: 200, description: 'Tables retrieved successfully' })
   async getTables(@Query() query: any) {
@@ -57,19 +71,5 @@ export class TablesController {
   @ApiResponse({ status: 200, description: 'Table status updated successfully' })
   async updateTableStatus(@Param('id') id: number, @Body() updateStatusDto: any) {
     return this.tablesService.updateStatus(id, updateStatusDto);
-  }
-
-  @Get(':id/qr-code')
-  @ApiOperation({ summary: 'Generate QR code for table' })
-  @ApiResponse({ status: 200, description: 'QR code generated successfully' })
-  async generateQRCode(@Param('id') id: number) {
-    return this.tablesService.generateQRCode(id);
-  }
-
-  @Get('qr/:tableNumber')
-  @ApiOperation({ summary: 'Get QR code by table number' })
-  @ApiResponse({ status: 200, description: 'QR code retrieved successfully' })
-  async getQRCode(@Param('tableNumber') tableNumber: string) {
-    return this.tablesService.getQRCode(tableNumber);
   }
 } 

@@ -22,35 +22,119 @@ export class MenuService {
   async findAll(query: any) {
     const { category, search, available, restaurantId } = query;
     
-    const queryBuilder = this.menuRepository.createQueryBuilder('menu');
+    try {
+      // Build where conditions
+      const where: any = {};
+      
+      if (restaurantId) {
+        where.restaurantId = parseInt(restaurantId);
+      }
 
-    if (restaurantId) {
-      queryBuilder.andWhere('menu.restaurantId = :restaurantId', { restaurantId });
-    }
+      if (available !== undefined) {
+        where.available = available === 'true' || available === true;
+      }
 
-    if (category && category !== 'all') {
-      queryBuilder.andWhere('menu.category = :category', { category });
-    }
-
-    if (search) {
-      queryBuilder.andWhere(
-        '(menu.name ILIKE :search OR menu.description ILIKE :search)',
-        { search: `%${search}%` }
-      );
-    }
-
-    if (available !== undefined) {
-      queryBuilder.andWhere('menu.available = :available', { 
-        available: available === 'true' 
+      // Find items - don't order by category since it might not exist in DB
+      let items = await this.menuRepository.find({
+        where,
+        order: { name: 'ASC' }
       });
+
+      // Filter by category in memory if provided
+      if (category && category !== 'all') {
+        items = items.filter(item => {
+          // Check if item has category property (enum) or category relation
+          if (item.category) {
+            // If it's an enum value, compare directly
+            if (typeof item.category === 'string') {
+              return item.category === category;
+            }
+            // If it's a relation object, check the name
+            if (item.category && typeof item.category === 'object' && 'name' in item.category) {
+              return item.category.name === category;
+            }
+          }
+          return false;
+        });
+      }
+
+      // Apply search filter in memory
+      if (search) {
+        const searchLower = search.toLowerCase();
+        items = items.filter(item => 
+          item.name.toLowerCase().includes(searchLower) ||
+          (item.description && item.description.toLowerCase().includes(searchLower))
+        );
+      }
+
+      return { items };
+    } catch (error) {
+      console.error('Error fetching menu items:', error);
+      // If error is about category column not existing, use raw query
+      if (error.message && (error.message.includes('category') || error.message.includes('42703'))) {
+        console.log('Category column not found, using fallback query');
+        const where: any = {};
+        if (restaurantId) {
+          where.restaurantId = parseInt(restaurantId);
+        }
+        if (available !== undefined) {
+          where.available = available === 'true' || available === true;
+        }
+        
+        // Use query builder to select only columns that exist
+        const queryBuilder = this.menuRepository.createQueryBuilder('menu');
+        
+        if (restaurantId) {
+          queryBuilder.where('menu.restaurant_id = :restaurantId', { restaurantId: parseInt(restaurantId) });
+        }
+        
+        if (available !== undefined) {
+          queryBuilder.andWhere('menu.available = :available', { 
+            available: available === 'true' || available === true 
+          });
+        }
+        
+        // Select only columns that definitely exist (exclude category)
+        queryBuilder.select([
+          'menu.id',
+          'menu.name',
+          'menu.description',
+          'menu.price',
+          'menu.available',
+          'menu.veg',
+          'menu.spicy_level',
+          'menu.ingredients',
+          'menu.image',
+          'menu.rating',
+          'menu.order_count',
+          'menu.popular',
+          'menu.restaurant_id',
+          'menu.created_at',
+          'menu.updated_at'
+        ]);
+        
+        queryBuilder.orderBy('menu.name', 'ASC');
+        
+        let items = await queryBuilder.getMany();
+        
+        // Apply filters in memory
+        if (category && category !== 'all') {
+          // Skip category filtering if column doesn't exist
+          console.log('Category filtering skipped - column does not exist in database');
+        }
+        
+        if (search) {
+          const searchLower = search.toLowerCase();
+          items = items.filter(item => 
+            item.name.toLowerCase().includes(searchLower) ||
+            (item.description && item.description.toLowerCase().includes(searchLower))
+          );
+        }
+
+        return { items };
+      }
+      throw error;
     }
-
-    const items = await queryBuilder
-      .orderBy('menu.category', 'ASC')
-      .addOrderBy('menu.name', 'ASC')
-      .getMany();
-
-    return { items };
   }
 
   async findById(id: number) {

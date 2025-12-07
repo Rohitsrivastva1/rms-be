@@ -1,7 +1,8 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, Inject, forwardRef } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Order, OrderItem, OrderStatus } from '../common/entities/order.entity';
+import { GatewayGateway } from '../gateway/gateway.gateway';
 
 @Injectable()
 export class OrdersService {
@@ -10,6 +11,8 @@ export class OrdersService {
     private orderRepository: Repository<Order>,
     @InjectRepository(OrderItem)
     private orderItemRepository: Repository<OrderItem>,
+    @Inject(forwardRef(() => GatewayGateway))
+    private gateway: GatewayGateway,
   ) {}
 
   async findAll(query: any) {
@@ -133,6 +136,17 @@ export class OrdersService {
 
       const savedOrder = await this.orderRepository.save(order);
       
+      // Load items for WebSocket emission
+      const orderWithItems = await this.orderRepository.findOne({
+        where: { id: savedOrder.id },
+        relations: ['items'],
+      });
+      
+      // Emit WebSocket event for new order
+      if (this.gateway) {
+        await this.gateway.emitOrderUpdate(orderWithItems);
+      }
+      
       console.log('Order placed:', savedOrder);
       return savedOrder;
     } catch (error) {
@@ -195,7 +209,10 @@ export class OrdersService {
   }
 
   async updateStatus(id: number, updateStatusDto: any) {
-    const order = await this.orderRepository.findOne({ where: { id } });
+    const order = await this.orderRepository.findOne({ 
+      where: { id },
+      relations: ['items'],
+    });
     if (!order) {
       throw new NotFoundException('Order not found');
     }
@@ -205,7 +222,14 @@ export class OrdersService {
       order.assignedChefId = updateStatusDto.assignedChef;
     }
 
-    return this.orderRepository.save(order);
+    const updatedOrder = await this.orderRepository.save(order);
+    
+    // Emit WebSocket event for order status update
+    if (this.gateway) {
+      await this.gateway.emitOrderUpdate(updatedOrder);
+    }
+
+    return updatedOrder;
   }
 
   async submitFeedback(orderId: string, feedbackDto: any) {

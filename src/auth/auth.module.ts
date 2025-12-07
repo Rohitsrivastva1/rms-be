@@ -13,9 +13,14 @@ import { JwtStrategy } from './strategies/jwt.strategy';
   imports: [
     PassportModule,
     TypeOrmModule.forFeature([User, Restaurant]),
-    JwtModule.register({
-      secret: 'rms_super_secret_key_2024_secure_jwt_token_for_restaurant_management_system',
-      signOptions: { expiresIn: '24h' },
+    ConfigModule,
+    JwtModule.registerAsync({
+      imports: [ConfigModule],
+      useFactory: async (configService: ConfigService) => ({
+        secret: configService.get<string>('JWT_SECRET') || 'rms_super_secret_key_2024_secure_jwt_token_for_restaurant_management_system',
+        signOptions: { expiresIn: configService.get<string>('JWT_EXPIRES_IN') || '24h' },
+      }),
+      inject: [ConfigService],
     }),
   ],
   controllers: [AuthController],

@@ -14,6 +14,7 @@ import { SuperAdminModule } from './superadmin/superadmin.module';
 import { TablesModule } from './tables/tables.module';
 import { StaffModule } from './staff/staff.module';
 import { CartModule } from './cart/cart.module';
+import { GatewayModule } from './gateway/gateway.module';
 import { User } from './common/entities/user.entity';
 import { Restaurant } from './common/entities/restaurant.entity';
 import { MenuItem } from './common/entities/menu.entity';
@@ -41,11 +42,11 @@ import { CartSetting } from './common/entities/cart-setting.entity';
     }),
     TypeOrmModule.forRoot({
       type: 'postgres',
-      host: 'localhost',
-      port:5432,
-      username:  'postgres',
-      password: '9695',
-      database:  'rms_db',
+      host: process.env.DB_HOST || 'localhost',
+      port: parseInt(process.env.DB_PORT) || 5432,
+      username: process.env.DB_USERNAME || 'postgres',
+      password: process.env.DB_PASSWORD || '9695',
+      database: process.env.DB_DATABASE || 'rms_db',
       entities: [
         User, 
         Restaurant, 
@@ -82,6 +83,7 @@ import { CartSetting } from './common/entities/cart-setting.entity';
     TablesModule,
     StaffModule,
     CartModule,
+    GatewayModule,
   ],
   controllers: [AppController],
   providers: [AppService],
