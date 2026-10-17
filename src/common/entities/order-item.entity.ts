@@ -3,7 +3,7 @@ import { ApiProperty } from '@nestjs/swagger';
 import { CartOrder } from './cart-order.entity';
 import { MenuItem } from './menu-item.entity';
 
-@Entity('order_items')
+@Entity('cart_order_items')
 export class OrderItem {
   @PrimaryGeneratedColumn()
   @ApiProperty()

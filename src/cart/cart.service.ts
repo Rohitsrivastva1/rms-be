@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Cart } from '../common/entities/cart.entity';
@@ -17,7 +17,9 @@ import { CartStatus, CartTheme } from '../common/entities/cart.entity';
 import { CartOrderStatus } from '../common/entities/cart-order.entity';
 import { NotificationType, NotificationStatus } from '../common/entities/notification.entity';
 import { PaymentMethod } from '../common/entities/cart-payment-setting.entity';
+import { UserRole, UserStatus } from '../common/entities/user.entity';
 import * as QRCode from 'qrcode';
+import * as bcrypt from 'bcryptjs';
 
 @Injectable()
 export class CartService {
@@ -68,6 +70,10 @@ export class CartService {
     });
 
     const savedCart = await this.cartRepository.save(cart);
+    const origin = process.env.CORS_ORIGIN || 'http://localhost:3001';
+    savedCart.qrData = `${origin}/guest/${savedCart.id}`;
+    savedCart.qrCode = await QRCode.toDataURL(savedCart.qrData);
+    await this.cartRepository.save(savedCart);
 
     // Create default settings
     await this.createDefaultSettings(savedCart.id);
@@ -90,10 +96,11 @@ export class CartService {
 
     // Filter by owner if specified (for cart owners)
     if (ownerId) {
-      console.log('CartService.getCarts - Adding owner filter for ownerId:', ownerId);
       queryBuilder.andWhere('cart.ownerId = :ownerId', { ownerId });
-    } else {
-      console.log('CartService.getCarts - No ownerId provided, returning all carts');
+    }
+
+    if (query.workerId) {
+      queryBuilder.andWhere('workers.userId = :workerId', { workerId: query.workerId });
     }
 
     if (status) {
@@ -211,6 +218,69 @@ export class CartService {
     }
 
     return await this.cartWorkerRepository.remove(worker);
+  }
+
+  async getWorkers(cartId: number) {
+    const workers = await this.cartWorkerRepository.find({
+      where: { cartId },
+      relations: ['user'],
+      order: { createdAt: 'DESC' },
+    });
+
+    return {
+      workers: workers.map((worker) => ({
+        id: worker.id,
+        userId: worker.userId,
+        role: worker.role,
+        status: worker.status,
+        name: worker.user?.name,
+        email: worker.user?.email,
+        phone: worker.user?.phone,
+      })),
+    };
+  }
+
+  async inviteWorker(cartId: number, dto: { name?: string; email?: string; password?: string; phone?: string; role?: string }) {
+    await this.getCartById(cartId);
+    const email = String(dto.email || '').trim().toLowerCase();
+    const name = String(dto.name || '').trim();
+    const role = dto.role || 'waiter';
+
+    if (!email || !name) {
+      throw new BadRequestException('Name and email are required');
+    }
+
+    let user = await this.userRepository.findOne({ where: { email } });
+
+    if (user && user.role !== UserRole.CART_WORKER) {
+      throw new BadRequestException('That email already belongs to another account');
+    }
+
+    if (!user) {
+      if (!dto.password || String(dto.password).length < 6) {
+        throw new BadRequestException('Password must be at least 6 characters');
+      }
+      user = await this.userRepository.save(this.userRepository.create({
+        name,
+        email,
+        password: await bcrypt.hash(dto.password, 10),
+        phone: dto.phone || null,
+        role: UserRole.CART_WORKER,
+        status: UserStatus.ACTIVE,
+        isActive: true,
+      }));
+    }
+
+    const worker = await this.addWorker(cartId, user.id, role);
+    return {
+      id: worker.id,
+      userId: user.id,
+      role: worker.role,
+      status: worker.status,
+      name: user.name,
+      email: user.email,
+      phone: user.phone,
+    };
   }
 
   // Menu Management
@@ -406,27 +476,36 @@ export class CartService {
       specialInstructions,
     } = createOrderDto;
 
+    if (!items?.length) {
+      throw new BadRequestException('Add at least one dish');
+    }
+
     // Calculate total amount
     let totalAmount = 0;
     const orderItems = [];
 
     for (const item of items) {
       const menuItem = await this.menuItemRepository.findOne({
-        where: { id: item.menuItemId },
+        where: { id: item.menuItemId, cartId },
       });
 
       if (!menuItem) {
         throw new NotFoundException(`Menu item with ID ${item.menuItemId} not found`);
       }
 
-      const itemTotal = menuItem.price * item.quantity;
+      const quantity = Number(item.quantity) || 0;
+      if (quantity < 1) {
+        throw new BadRequestException('Each dish needs a quantity');
+      }
+
+      const itemTotal = Number(menuItem.price) * quantity;
       totalAmount += itemTotal;
 
       orderItems.push({
         menuItemId: item.menuItemId,
         itemName: menuItem.name,
-        quantity: item.quantity,
-        unitPrice: menuItem.price,
+        quantity,
+        unitPrice: Number(menuItem.price),
         totalPrice: itemTotal,
         specialInstructions: item.specialInstructions,
       });
@@ -434,6 +513,7 @@ export class CartService {
 
     const order = this.cartOrderRepository.create({
       cartId,
+      orderNumber: `SV${Date.now().toString().slice(-8)}${Math.floor(Math.random() * 90 + 10)}`,
       customerName,
       customerPhone,
       customerEmail,
@@ -466,7 +546,62 @@ export class CartService {
       data: { orderId: savedOrder.id },
     });
 
-    return savedOrder;
+    return this.cartOrderRepository.findOne({
+      where: { id: savedOrder.id },
+      relations: ['items'],
+    });
+  }
+
+  async getWorkerOrders(cartId: number, userId: number) {
+    const assignment = await this.cartWorkerRepository.findOne({
+      where: { cartId, userId },
+    });
+    if (!assignment) {
+      throw new ForbiddenException('You are not assigned to this venue');
+    }
+    return this.getCartOrders(cartId);
+  }
+
+  async getCartOrders(cartId: number) {
+    const orders = await this.cartOrderRepository.find({
+      where: { cartId },
+      relations: ['items'],
+      order: { createdAt: 'DESC' },
+    });
+    return { orders };
+  }
+
+  async getOrderByNumber(orderNumber: string) {
+    const order = await this.cartOrderRepository.findOne({
+      where: { orderNumber },
+      relations: ['items'],
+    });
+    if (!order) {
+      throw new NotFoundException('Order not found');
+    }
+    return {
+      orderNumber: order.orderNumber,
+      status: order.status,
+      finalAmount: order.finalAmount,
+      items: order.items,
+    };
+  }
+
+  async getPublicVenue(id: number) {
+    const cart = await this.getCartById(id);
+    if (cart.status === CartStatus.SUSPENDED || cart.status === CartStatus.INACTIVE) {
+      throw new NotFoundException('This venue is not taking orders');
+    }
+    const { categories } = await this.getMenuCategories(id);
+    const { menuItems } = await this.getMenuItems(id);
+    return {
+      id: cart.id,
+      name: cart.name,
+      description: cart.description,
+      location: cart.location,
+      categories: categories.filter((category) => category.isActive !== false),
+      menuItems: menuItems.filter((item) => item.isAvailable !== false),
+    };
   }
 
   async updateOrderStatus(orderId: number, status: CartOrderStatus, workerId?: number) {
@@ -481,7 +616,12 @@ export class CartService {
 
     order.status = status;
     if (workerId) {
-      order.assignedWorkerId = workerId;
+      const assignment = await this.cartWorkerRepository.findOne({
+        where: { userId: workerId, cartId: order.cartId },
+      });
+      if (assignment) {
+        order.assignedWorkerId = assignment.id;
+      }
     }
 
     const savedOrder = await this.cartOrderRepository.save(order);
@@ -581,12 +721,16 @@ export class CartService {
     message: string;
     data?: any;
   }) {
-    const notification = this.notificationRepository.create({
-      ...notificationData,
-      status: NotificationStatus.PENDING,
-    });
-
-    return await this.notificationRepository.save(notification);
+    try {
+      const notification = this.notificationRepository.create({
+        ...notificationData,
+        status: NotificationStatus.PENDING,
+      });
+      return await this.notificationRepository.save(notification);
+    } catch (error) {
+      console.error('Notification skipped:', error.message);
+      return null;
+    }
   }
 
   // Public Cart Access (for customers)

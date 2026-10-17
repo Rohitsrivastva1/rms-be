@@ -15,7 +15,7 @@ export enum CartOrderStatus {
   CANCELLED = 'cancelled',
 }
 
-@Entity('orders')
+@Entity('cart_orders')
 export class CartOrder {
   @PrimaryGeneratedColumn()
   @ApiProperty()

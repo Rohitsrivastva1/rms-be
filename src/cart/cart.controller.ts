@@ -138,8 +138,7 @@ export class CartController {
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Get cart orders for worker' })
   async getCartOrders(@Param('id') id: number, @Request() req: any) {
-    // Implementation to get orders for a specific cart
-    return await this.cartService.getCartById(id);
+    return await this.cartService.getWorkerOrders(id, req.user.userId);
   }
 
   @Put('worker/orders/:id/status')
@@ -171,8 +170,13 @@ export class CartController {
   @Get('public/orders/:orderNumber/status')
   @ApiOperation({ summary: 'Get order status (Public)' })
   async getOrderStatus(@Param('orderNumber') orderNumber: string) {
-    // Implementation to get order status by order number
-    return { orderNumber, status: 'pending' };
+    return await this.cartService.getOrderByNumber(orderNumber);
+  }
+
+  @Get('public/venues/:id')
+  @ApiOperation({ summary: 'Get a venue menu for guests' })
+  async getPublicVenue(@Param('id') id: number) {
+    return await this.cartService.getPublicVenue(id);
   }
 
   // Menu Management Routes
@@ -257,13 +261,55 @@ export class CartController {
     return await this.cartService.bulkImportMenuItems(id, bulkImportDto.items);
   }
 
+  @Get('owner/carts/:id/orders')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.CART_OWNER)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get venue orders' })
+  async getOwnerOrders(@Param('id') id: number) {
+    return await this.cartService.getCartOrders(id);
+  }
+
+  @Post('owner/carts/:id/orders')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.CART_OWNER)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Take an order at the venue' })
+  async createOwnerOrder(@Param('id') id: number, @Body() createOrderDto: any) {
+    return await this.cartService.createOrder(id, createOrderDto);
+  }
+
+  @Put('owner/orders/:orderId/status')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.CART_OWNER)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Update order status (owner)' })
+  async updateOwnerOrderStatus(
+    @Param('orderId') orderId: number,
+    @Body() updateStatusDto: { status: CartOrderStatus },
+  ) {
+    return await this.cartService.updateOrderStatus(orderId, updateStatusDto.status);
+  }
+
   // Worker Management Routes
+  @Get('owner/carts/:id/workers')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.CART_OWNER)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get venue staff' })
+  async getWorkers(@Param('id') id: number) {
+    return await this.cartService.getWorkers(id);
+  }
+
   @Post('owner/carts/:id/workers')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.CART_OWNER)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Add worker to cart' })
-  async addWorker(@Param('id') id: number, @Body() addWorkerDto: { userId: number; role: string }) {
+  async addWorker(@Param('id') id: number, @Body() addWorkerDto: { userId?: number; role?: string; name?: string; email?: string; password?: string; phone?: string }) {
+    if (addWorkerDto.email) {
+      return await this.cartService.inviteWorker(id, addWorkerDto);
+    }
     return await this.cartService.addWorker(id, addWorkerDto.userId, addWorkerDto.role);
   }
 

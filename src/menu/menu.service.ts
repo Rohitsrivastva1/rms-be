@@ -2,12 +2,15 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { MenuItem, MenuCategory } from '../common/entities/menu.entity';
+import { Restaurant } from '../common/entities/restaurant.entity';
 
 @Injectable()
 export class MenuService {
   constructor(
     @InjectRepository(MenuItem)
     private menuRepository: Repository<MenuItem>,
+    @InjectRepository(Restaurant)
+    private restaurantRepository: Repository<Restaurant>,
   ) {}
 
   async getCategories() {
@@ -43,16 +46,17 @@ export class MenuService {
       // Filter by category in memory if provided
       if (category && category !== 'all') {
         items = items.filter(item => {
-          // Check if item has category property (enum) or category relation
-          if (item.category) {
-            // If it's an enum value, compare directly
-            if (typeof item.category === 'string') {
-              return item.category === category;
-            }
-            // If it's a relation object, check the name
-            if (item.category && typeof item.category === 'object' && 'name' in item.category) {
-              return item.category.name === category;
-            }
+          const categoryValue: unknown = item.category;
+          if (typeof categoryValue === 'string') {
+            return categoryValue === category;
+          }
+          if (
+            categoryValue &&
+            typeof categoryValue === 'object' &&
+            'name' in categoryValue &&
+            typeof (categoryValue as { name?: unknown }).name === 'string'
+          ) {
+            return (categoryValue as { name: string }).name === category;
           }
           return false;
         });
@@ -205,11 +209,16 @@ export class MenuService {
       return acc;
     }, {});
 
+    const restaurant = await this.restaurantRepository.findOne({ where: { id: restaurantId } });
+    if (!restaurant) {
+      throw new NotFoundException('Restaurant not found');
+    }
+
     return {
       restaurant: {
-        name: 'Demo Restaurant', // This should come from restaurant service
-        logo: 'https://via.placeholder.com/150',
-        description: 'Authentic Indian Cuisine'
+        name: restaurant.name,
+        logo: restaurant.logo || null,
+        description: restaurant.description || restaurant.cuisine,
       },
       menu: menuByCategory
     };

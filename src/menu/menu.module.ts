@@ -3,10 +3,11 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { MenuController } from './menu.controller';
 import { MenuService } from './menu.service';
 import { MenuItem } from '../common/entities/menu.entity';
+import { Restaurant } from '../common/entities/restaurant.entity';
 import { AuthModule } from '../auth/auth.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([MenuItem]), AuthModule],
+  imports: [TypeOrmModule.forFeature([MenuItem, Restaurant]), AuthModule],
   controllers: [MenuController],
   providers: [MenuService],
   exports: [MenuService],

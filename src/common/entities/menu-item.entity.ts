@@ -12,7 +12,7 @@ export enum MenuCategoryType {
   BEVERAGES = 'beverages',
 }
 
-@Entity('menu_items')
+@Entity('cart_menu_items')
 export class MenuItem {
   @PrimaryGeneratedColumn()
   @ApiProperty()
