@@ -14,6 +14,8 @@ import { CartAnalytics } from '../common/entities/cart-analytics.entity';
 import { CustomerFeedback } from '../common/entities/customer-feedback.entity';
 import { CartSetting } from '../common/entities/cart-setting.entity';
 import { User } from '../common/entities/user.entity';
+import { CartTable } from '../common/entities/cart-table.entity';
+import { CartSeatSession } from '../common/entities/cart-seat-session.entity';
 
 @Module({
   imports: [
@@ -30,6 +32,8 @@ import { User } from '../common/entities/user.entity';
       CustomerFeedback,
       CartSetting,
       User,
+      CartTable,
+      CartSeatSession,
     ]),
   ],
   controllers: [CartController],

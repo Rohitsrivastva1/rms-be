@@ -33,6 +33,8 @@ import { CartPaymentSetting } from './common/entities/cart-payment-setting.entit
 import { CartAnalytics } from './common/entities/cart-analytics.entity';
 import { CustomerFeedback } from './common/entities/customer-feedback.entity';
 import { CartSetting } from './common/entities/cart-setting.entity';
+import { CartTable } from './common/entities/cart-table.entity';
+import { CartSeatSession } from './common/entities/cart-seat-session.entity';
 
 @Module({
   imports: [
@@ -66,7 +68,9 @@ import { CartSetting } from './common/entities/cart-setting.entity';
         CartPaymentSetting,
         CartAnalytics,
         CustomerFeedback,
-        CartSetting
+        CartSetting,
+        CartTable,
+        CartSeatSession
       ],
                 synchronize: false, // Disabled to prevent schema conflicts
       logging: process.env.NODE_ENV === 'development',

@@ -29,6 +29,10 @@ export class CartOrder {
   @ApiProperty()
   cartId: number;
 
+  @Column({ name: 'seat_session_id', nullable: true })
+  @ApiProperty()
+  seatSessionId: number;
+
   @ManyToOne(() => Cart, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'cart_id' })
   cart: Cart;

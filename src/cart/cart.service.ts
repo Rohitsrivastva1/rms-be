@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ForbiddenException, ConflictException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Cart } from '../common/entities/cart.entity';
@@ -13,6 +13,7 @@ import { CartAnalytics } from '../common/entities/cart-analytics.entity';
 import { CustomerFeedback } from '../common/entities/customer-feedback.entity';
 import { CartSetting } from '../common/entities/cart-setting.entity';
 import { User } from '../common/entities/user.entity';
+import { CartTable } from '../common/entities/cart-table.entity';
 import { CartStatus, CartTheme } from '../common/entities/cart.entity';
 import { CartOrderStatus } from '../common/entities/cart-order.entity';
 import { NotificationType, NotificationStatus } from '../common/entities/notification.entity';
@@ -20,6 +21,8 @@ import { PaymentMethod } from '../common/entities/cart-payment-setting.entity';
 import { UserRole, UserStatus } from '../common/entities/user.entity';
 import * as QRCode from 'qrcode';
 import * as bcrypt from 'bcryptjs';
+import { createHash, randomBytes } from 'crypto';
+import { CartSeatSession } from '../common/entities/cart-seat-session.entity';
 
 @Injectable()
 export class CartService {
@@ -48,6 +51,10 @@ export class CartService {
     private cartSettingRepository: Repository<CartSetting>,
     @InjectRepository(User)
     private userRepository: Repository<User>,
+    @InjectRepository(CartTable)
+    private cartTableRepository: Repository<CartTable>,
+    @InjectRepository(CartSeatSession)
+    private seatSessionRepository: Repository<CartSeatSession>,
   ) {}
 
   // Cart Management
@@ -464,7 +471,7 @@ export class CartService {
   }
 
   // Order Management
-  async createOrder(cartId: number, createOrderDto: any) {
+  async createOrder(cartId: number, createOrderDto: any, seatSessionId?: number) {
     const {
       customerName,
       customerPhone,
@@ -513,6 +520,7 @@ export class CartService {
 
     const order = this.cartOrderRepository.create({
       cartId,
+      seatSessionId: seatSessionId || null,
       orderNumber: `SV${Date.now().toString().slice(-8)}${Math.floor(Math.random() * 90 + 10)}`,
       customerName,
       customerPhone,
@@ -587,21 +595,177 @@ export class CartService {
     };
   }
 
-  async getPublicVenue(id: number) {
-    const cart = await this.getCartById(id);
+  async getTableBill(cartId: number, tableNumber: string) {
+    const table = String(tableNumber || '').trim();
+    if (!table) {
+      throw new BadRequestException('Choose a table');
+    }
+    const cart = await this.getCartById(cartId);
     if (cart.status === CartStatus.SUSPENDED || cart.status === CartStatus.INACTIVE) {
       throw new NotFoundException('This venue is not taking orders');
     }
-    const { categories } = await this.getMenuCategories(id);
-    const { menuItems } = await this.getMenuItems(id);
+
+    const orders = await this.cartOrderRepository
+      .createQueryBuilder('ticket')
+      .leftJoinAndSelect('ticket.items', 'items')
+      .where('ticket.cartId = :cartId', { cartId })
+      .andWhere('LOWER(ticket.tableNumber) = LOWER(:table)', { table })
+      .andWhere("ticket.created_at >= date_trunc('day', now())")
+      .orderBy('ticket.createdAt', 'DESC')
+      .getMany();
+
+    const bill = orders
+      .filter((order) => order.status !== CartOrderStatus.CANCELLED)
+      .reduce((sum, order) => sum + Number(order.finalAmount || 0), 0);
+
     return {
-      id: cart.id,
-      name: cart.name,
-      description: cart.description,
-      location: cart.location,
-      categories: categories.filter((category) => category.isActive !== false),
-      menuItems: menuItems.filter((item) => item.isAvailable !== false),
+      tableNumber: table,
+      bill,
+      orders: orders.map((order) => ({
+        id: order.id,
+        orderNumber: order.orderNumber,
+        status: order.status,
+        customerName: order.customerName,
+        specialInstructions: order.specialInstructions,
+        finalAmount: order.finalAmount,
+        createdAt: order.createdAt,
+        items: (order.items || []).map((item) => ({
+          id: item.id,
+          name: item.itemName,
+          quantity: item.quantity,
+          totalPrice: item.totalPrice,
+        })),
+      })),
     };
+  }
+
+  async getPublicVenue(_id: number) {
+    throw new NotFoundException('Scan the QR on your table.');
+  }
+
+  private hashSeatToken(token: string) {
+    return createHash('sha256').update(token).digest('hex');
+  }
+
+  private async sessionOrders(sessionId: number) {
+    const orders = await this.cartOrderRepository.find({
+      where: { seatSessionId: sessionId },
+      relations: ['items'],
+      order: { createdAt: 'DESC' },
+    });
+    const bill = orders
+      .filter((order) => order.status !== CartOrderStatus.CANCELLED)
+      .reduce((sum, order) => sum + Number(order.finalAmount || 0), 0);
+    return {
+      bill,
+      orders: orders.map((order) => ({
+        id: order.id,
+        orderNumber: order.orderNumber,
+        status: order.status,
+        customerName: order.customerName,
+        specialInstructions: order.specialInstructions,
+        finalAmount: order.finalAmount,
+        createdAt: order.createdAt,
+        items: (order.items || []).map((item) => ({
+          id: item.id,
+          name: item.itemName,
+          quantity: item.quantity,
+          totalPrice: item.totalPrice,
+        })),
+      })),
+    };
+  }
+
+  private async holdSeat(seatKey: string, token?: string) {
+    const table = await this.cartTableRepository.findOne({ where: { seatKey } });
+    if (!table || !table.isActive) {
+      throw new NotFoundException('This seat is not available.');
+    }
+    const cart = await this.getCartById(table.cartId);
+    if (cart.status === CartStatus.SUSPENDED || cart.status === CartStatus.INACTIVE) {
+      throw new NotFoundException('This venue is not taking orders');
+    }
+    let session = await this.seatSessionRepository.findOne({ where: { tableId: table.id, status: 'active' } });
+    let sessionToken = token || '';
+    if (!session) {
+      sessionToken = randomBytes(24).toString('hex');
+      try {
+        session = await this.seatSessionRepository.save(this.seatSessionRepository.create({
+          tableId: table.id,
+          cartId: table.cartId,
+          tokenHash: this.hashSeatToken(sessionToken),
+          status: 'active',
+        }));
+      } catch (error) {
+        throw new ConflictException('This seat is taken. It opens again after the guest pays.');
+      }
+    } else if (!token || this.hashSeatToken(token) !== session.tokenHash) {
+      throw new ConflictException('This seat is taken. It opens again after the guest pays.');
+    }
+    return { table, cart, session, sessionToken };
+  }
+
+  async enterSeat(seatKey: string, token?: string) {
+    const { table, cart, session, sessionToken } = await this.holdSeat(seatKey, token);
+    const { categories } = await this.getMenuCategories(cart.id);
+    const { menuItems } = await this.getMenuItems(cart.id);
+    const bill = await this.sessionOrders(session.id);
+    return {
+      sessionToken,
+      table: { label: table.label, seats: table.seats },
+      venue: {
+        id: cart.id,
+        name: cart.name,
+        description: cart.description,
+        location: cart.location,
+        categories: categories.filter((category) => category.isActive !== false),
+        menuItems: menuItems.filter((item) => item.isAvailable !== false),
+      },
+      ...bill,
+    };
+  }
+
+  async seatBill(seatKey: string, token: string) {
+    const held = await this.holdSeat(seatKey, token);
+    const bill = await this.sessionOrders(held.session.id);
+    return { tableNumber: held.table.label, ...bill };
+  }
+
+  async paySeat(seatKey: string, token: string) {
+    const held = await this.holdSeat(seatKey, token);
+    const bill = await this.sessionOrders(held.session.id);
+    held.session.status = 'paid';
+    held.session.paidAt = new Date();
+    await this.seatSessionRepository.save(held.session);
+    return { paid: true, bill: bill.bill };
+  }
+
+  async leaveSeat(seatKey: string, token: string) {
+    const held = await this.holdSeat(seatKey, token);
+    const bill = await this.sessionOrders(held.session.id);
+    if (bill.bill > 0) {
+      throw new BadRequestException('Pay the bill before leaving this seat.');
+    }
+    held.session.status = 'released';
+    await this.seatSessionRepository.save(held.session);
+    return { released: true };
+  }
+
+  async createGuestOrder(token: string, createOrderDto: any) {
+    if (!token) {
+      throw new ForbiddenException('Scan the QR on your table.');
+    }
+    const tokenHash = this.hashSeatToken(token);
+    const session = await this.seatSessionRepository.findOne({ where: { tokenHash, status: 'active' } });
+    if (!session) {
+      throw new ForbiddenException('This seat is no longer yours.');
+    }
+    const table = await this.cartTableRepository.findOne({ where: { id: session.tableId } });
+    return this.createOrder(session.cartId, {
+      ...createOrderDto,
+      tableNumber: table?.label,
+      cartId: session.cartId,
+    }, session.id);
   }
 
   async updateOrderStatus(orderId: number, status: CartOrderStatus, workerId?: number) {
@@ -750,5 +914,104 @@ export class CartService {
     }
 
     return cart;
+  }
+
+  async getOwnerSnapshot(ownerId: number) {
+    const rows = await this.cartOrderRepository.query(
+      `SELECT o.cart_id AS "cartId",
+              COUNT(*) FILTER (WHERE o.status NOT IN ('completed', 'cancelled', 'delivered'))::int AS "openOrders",
+              COALESCE(SUM(o.final_amount) FILTER (
+                WHERE o.status <> 'cancelled'
+                  AND o.created_at >= date_trunc('day', now())
+              ), 0)::float AS "todayRevenue"
+       FROM cart_orders o
+       INNER JOIN carts c ON c.id = o.cart_id
+       WHERE c.owner_id = $1
+       GROUP BY o.cart_id`,
+      [ownerId],
+    );
+    return { venues: rows };
+  }
+
+  async setVenueOpen(cartId: number, ownerId: number, open: boolean) {
+    const cart = await this.getCartById(cartId);
+    if (cart.ownerId !== ownerId) {
+      throw new ForbiddenException('You do not own this venue');
+    }
+    cart.status = open ? CartStatus.ACTIVE : CartStatus.SUSPENDED;
+    return this.cartRepository.save(cart);
+  }
+
+  async getTables(cartId: number) {
+    const tables = (await this.cartTableRepository.find({ where: { cartId } }))
+      .sort((a, b) => a.label.localeCompare(b.label, undefined, { numeric: true }));
+    const active = await this.seatSessionRepository.find({ where: { cartId, status: 'active' } });
+    const busy = new Set(active.map((session) => session.tableId));
+    return {
+      tables: tables.map((table) => ({
+        id: table.id,
+        label: table.label,
+        seats: table.seats,
+        seatKey: table.seatKey,
+        occupied: busy.has(table.id),
+      })),
+    };
+  }
+
+  async createTable(cartId: number, dto: { label?: string; seats?: number }) {
+    await this.getCartById(cartId);
+    const label = String(dto.label || '').trim();
+    if (!label) {
+      throw new BadRequestException('A table needs a number or name');
+    }
+    const existing = await this.cartTableRepository.findOne({ where: { cartId, label } });
+    if (existing) {
+      throw new BadRequestException(`Table ${label} already exists`);
+    }
+    return this.cartTableRepository.save(this.cartTableRepository.create({
+      cartId,
+      label,
+      seatKey: randomBytes(24).toString('hex'),
+      seats: Math.max(1, Number(dto.seats) || 4),
+      isActive: true,
+    }));
+  }
+
+  async createTableRange(cartId: number, from: number, count: number, seats = 4) {
+    await this.getCartById(cartId);
+    const start = Math.max(1, Number(from) || 1);
+    const total = Math.min(40, Math.max(1, Number(count) || 1));
+    const created = [];
+    for (let offset = 0; offset < total; offset += 1) {
+      const label = String(start + offset);
+      const existing = await this.cartTableRepository.findOne({ where: { cartId, label } });
+      if (existing) continue;
+      created.push(await this.cartTableRepository.save(this.cartTableRepository.create({
+        cartId,
+        label,
+        seatKey: randomBytes(24).toString('hex'),
+        seats: Math.max(1, Number(seats) || 4),
+        isActive: true,
+      })));
+    }
+    return { tables: created };
+  }
+
+  async deleteTable(cartId: number, tableId: number) {
+    const table = await this.cartTableRepository.findOne({ where: { id: tableId, cartId } });
+    if (!table) {
+      throw new NotFoundException('Table not found');
+    }
+    await this.cartTableRepository.remove(table);
+    return { message: 'Table removed' };
+  }
+
+  async releaseSeat(cartId: number, tableId: number) {
+    const table = await this.cartTableRepository.findOne({ where: { id: tableId, cartId } });
+    if (!table) {
+      throw new NotFoundException('Table not found');
+    }
+    await this.seatSessionRepository.update({ tableId, status: 'active' }, { status: 'released' });
+    return { released: true };
   }
 }

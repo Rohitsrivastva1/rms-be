@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Put, Delete, Body, Param, Query, UseGuards, Request } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Body, Param, Query, UseGuards, Request, Headers } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
@@ -162,9 +162,33 @@ export class CartController {
   }
 
   @Post('public/orders')
-  @ApiOperation({ summary: 'Create order (Public)' })
-  async createOrder(@Body() createOrderDto: any) {
-    return await this.cartService.createOrder(createOrderDto.cartId, createOrderDto);
+  @ApiOperation({ summary: 'Create order from a claimed seat' })
+  async createOrder(@Body() createOrderDto: any, @Headers('x-seat-token') token: string) {
+    return await this.cartService.createGuestOrder(token, createOrderDto);
+  }
+
+  @Post('public/seats/:seatKey/enter')
+  @ApiOperation({ summary: 'Claim a table QR, or resume the guest who already holds it' })
+  async enterSeat(@Param('seatKey') seatKey: string, @Body() body: { sessionToken?: string }) {
+    return await this.cartService.enterSeat(seatKey, body?.sessionToken);
+  }
+
+  @Get('public/seats/:seatKey/bill')
+  @ApiOperation({ summary: 'Bill for the guest holding this seat' })
+  async seatBill(@Param('seatKey') seatKey: string, @Headers('x-seat-token') token: string) {
+    return await this.cartService.seatBill(seatKey, token);
+  }
+
+  @Post('public/seats/:seatKey/pay')
+  @ApiOperation({ summary: 'Pay the bill and free the seat' })
+  async paySeat(@Param('seatKey') seatKey: string, @Headers('x-seat-token') token: string) {
+    return await this.cartService.paySeat(seatKey, token);
+  }
+
+  @Post('public/seats/:seatKey/leave')
+  @ApiOperation({ summary: 'Leave an empty seat' })
+  async leaveSeat(@Param('seatKey') seatKey: string, @Headers('x-seat-token') token: string) {
+    return await this.cartService.leaveSeat(seatKey, token);
   }
 
   @Get('public/orders/:orderNumber/status')
@@ -178,6 +202,7 @@ export class CartController {
   async getPublicVenue(@Param('id') id: number) {
     return await this.cartService.getPublicVenue(id);
   }
+
 
   // Menu Management Routes
   @Get('owner/carts/:id/categories')
@@ -320,6 +345,63 @@ export class CartController {
   @ApiOperation({ summary: 'Remove worker from cart' })
   async removeWorker(@Param('id') id: number, @Param('userId') userId: number) {
     return await this.cartService.removeWorker(id, userId);
+  }
+
+  @Get('owner/summary')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.CART_OWNER)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Open tickets and today revenue' })
+  async getOwnerSnapshot(@Request() req: any) {
+    return await this.cartService.getOwnerSnapshot(req.user.userId);
+  }
+
+  @Put('owner/carts/:id/service')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.CART_OWNER)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Open or pause a venue' })
+  async setVenueOpen(@Param('id') id: number, @Body() body: { open: boolean }, @Request() req: any) {
+    return await this.cartService.setVenueOpen(id, req.user.userId, body.open !== false);
+  }
+
+  @Get('owner/carts/:id/tables')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.CART_OWNER)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'List venue tables' })
+  async getTables(@Param('id') id: number) {
+    return await this.cartService.getTables(id);
+  }
+
+  @Post('owner/carts/:id/tables')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.CART_OWNER)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Add a table or a numbered range' })
+  async createTable(@Param('id') id: number, @Body() body: { label?: string; seats?: number; from?: number; count?: number }) {
+    if (body.count) {
+      return await this.cartService.createTableRange(id, body.from, body.count, body.seats);
+    }
+    return await this.cartService.createTable(id, body);
+  }
+
+  @Delete('owner/carts/:id/tables/:tableId')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.CART_OWNER)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Remove a table' })
+  async deleteTable(@Param('id') id: number, @Param('tableId') tableId: number) {
+    return await this.cartService.deleteTable(id, tableId);
+  }
+
+  @Post('owner/carts/:id/tables/:tableId/release')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.CART_OWNER)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Free a seat that a guest still holds' })
+  async releaseSeat(@Param('id') id: number, @Param('tableId') tableId: number) {
+    return await this.cartService.releaseSeat(id, tableId);
   }
 
   // Analytics Routes
